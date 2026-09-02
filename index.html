@@ -8,8 +8,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Canvas Confetti CDN -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Firebase SDK (v9 호환 모드 CDN) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <!-- Google Fonts (Noto Sans KR, Gaegu) -->
     <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+    
     <style>
         body {
             font-family: 'Noto Sans KR', sans-serif;
@@ -19,7 +23,6 @@
         .handwriting {
             font-family: 'Gaegu', cursive;
         }
-        /* Sticky Note Styles */
         .sticky-note {
             transition: all 0.3s ease;
             box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.15);
@@ -29,7 +32,6 @@
             z-index: 10;
             box-shadow: 8px 8px 25px rgba(0, 0, 0, 0.25);
         }
-        /* Custom Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -63,24 +65,20 @@
             </p>
         </header>
 
-        <!-- Top Section: Live Word Cloud -->
         <section class="bg-white/90 backdrop-blur-md rounded-3xl p-6 shadow-xl border-2 border-purple-200">
             <div class="flex items-center justify-between mb-4 border-b pb-3">
                 <h2 class="text-xl md:text-2xl font-bold text-purple-700 flex items-center gap-2">
                     <span>☁️</span> 삼행시 인기 키워드 (워드클라우드)
                 </h2>
                 <span class="text-xs md:text-sm text-purple-500 bg-purple-100 px-3 py-1 rounded-full font-semibold">
-                    실시간 집계 중
+                    실시간 자동 집계 중
                 </span>
             </div>
             
-            <!-- Word Cloud Box -->
             <div id="wordCloudContainer" class="min-h-[160px] flex flex-wrap items-center justify-center gap-3 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border border-purple-100">
-                <!-- Word cloud items will be injected here -->
             </div>
         </section>
 
-        <!-- Main Section: Form & Sticky Note Wall -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             <!-- Left: Message Input Form -->
@@ -108,7 +106,6 @@
                             </div>
                         </div>
 
-                        <!-- 3-line Poem Inputs -->
                         <div class="space-y-2 pt-2 border-t border-pink-100">
                             <label class="block text-sm font-bold text-pink-600 mb-1">백 · 남 · 권 삼행시 입력</label>
                             
@@ -146,12 +143,10 @@
                         <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
                             <span>📌</span> 삼행시 전시장 <span id="messageCount" class="text-sm bg-pink-500 text-white px-2.5 py-0.5 rounded-full">0</span>
                         </h2>
-                        <span class="text-xs text-gray-500">메모지에 마우스를 올리면 크게 보여요!</span>
+                        <span class="text-xs text-gray-500">실시간 연동 중 ⚡</span>
                     </div>
 
-                    <!-- Note Grid -->
                     <div id="notesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Sticky Notes will be injected here -->
                     </div>
                 </div>
             </div>
@@ -160,22 +155,27 @@
     </div>
 
     <script>
-        // Default Sample Data (3-line poems for 백남권)
-        let messages = [
-            { 
-                id: 1, 
-                author: "교장 선생님", 
-                line1: "백 만 번을 환영해도 모자란 우리 교감 선생님!", 
-                line2: "남다른 열정으로 우리 학교를 이끌어주실", 
-                line3: "권위 대신 친근함으로 다가와 주실 선장님을 응원합니다!", 
-                color: "yellow", 
-                rotation: "-2deg" 
-            }
-        ];
+        // 🚨 [중요] Firebase 콘솔에서 복사한 설정값을 아래에 붙여넣어주세요!
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
 
+        // Firebase 초기화 (설정값이 입력되었을 때만 작동)
+        let db = null;
+        if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+        }
+
+        let messages = [];
         let selectedColor = 'yellow';
 
-        // Sticky Note Color Palette (Tailwind Classes)
         const colorMap = {
             yellow: 'bg-yellow-200 text-yellow-900 border-yellow-300',
             pink: 'bg-pink-200 text-pink-900 border-pink-300',
@@ -184,7 +184,6 @@
             purple: 'bg-purple-200 text-purple-900 border-purple-300'
         };
 
-        // DOM Elements
         const messageForm = document.getElementById('messageForm');
         const authorInput = document.getElementById('authorInput');
         const line1Input = document.getElementById('line1Input');
@@ -195,7 +194,6 @@
         const messageCount = document.getElementById('messageCount');
         const colorBtns = document.querySelectorAll('.color-btn');
 
-        // Color Picker Logic
         colorBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 colorBtns.forEach(b => b.classList.remove('ring-2', 'ring-offset-2', 'ring-pink-500'));
@@ -204,13 +202,12 @@
             });
         });
 
-        // Generate Random Rotations for Sticky Notes
         function getRandomRotation() {
             const rotations = ['-3deg', '-2deg', '-1deg', '1deg', '2deg', '3deg'];
             return rotations[Math.floor(Math.random() * rotations.length)];
         }
 
-        // Render Sticky Notes Wall
+        // 삼행시 화면 렌더링
         function renderNotes() {
             notesContainer.innerHTML = '';
             messageCount.textContent = messages.length;
@@ -220,7 +217,7 @@
                 const colorClasses = colorMap[msg.color] || colorMap.yellow;
                 
                 noteElement.className = `sticky-note ${colorClasses} p-5 rounded-2xl border-t-4 relative flex flex-col justify-between min-h-[180px]`;
-                noteElement.style.transform = `rotate(${msg.rotation})`;
+                noteElement.style.transform = `rotate(${msg.rotation || '0deg'})`;
 
                 noteElement.innerHTML = `
                     <div class="handwriting text-lg leading-relaxed mb-4 space-y-1">
@@ -230,7 +227,7 @@
                     </div>
                     <div class="flex items-center justify-between text-xs font-bold opacity-75 border-t border-black/10 pt-2">
                         <span>From. ${msg.author}</span>
-                        <button onclick="deleteNote(${msg.id})" class="text-red-500 hover:text-red-700 opacity-50 hover:opacity-100 transition">삭제</button>
+                        <button onclick="deleteNote('${msg.id}')" class="text-red-500 hover:text-red-700 opacity-50 hover:opacity-100 transition">삭제</button>
                     </div>
                 `;
                 notesContainer.appendChild(noteElement);
@@ -239,7 +236,7 @@
             updateWordCloud();
         }
 
-        // Add New Note
+        // 삼행시 등록
         messageForm.addEventListener('submit', (e) => {
             e.preventDefault();
 
@@ -251,49 +248,84 @@
             if (!author || !line1 || !line2 || !line3) return;
 
             const newMsg = {
-                id: Date.now(),
                 author: author,
                 line1: line1,
                 line2: line2,
                 line3: line3,
                 color: selectedColor,
-                rotation: getRandomRotation()
+                rotation: getRandomRotation(),
+                timestamp: Date.now()
             };
 
-            messages.unshift(newMsg);
-            renderNotes();
+            // Firebase가 설정된 경우 실시간 DB에 저장
+            if (db) {
+                db.ref('poems').push(newMsg);
+            } else {
+                // Firebase 연결 전 테스트용 로컬 저장
+                newMsg.id = Date.now().toString();
+                messages.unshift(newMsg);
+                renderNotes();
+            }
 
-            // Trigger Confetti Animation
             confetti({
                 particleCount: 120,
                 spread: 80,
                 origin: { y: 0.6 }
             });
 
-            // Reset Form Inputs
             line1Input.value = '';
             line2Input.value = '';
             line3Input.value = '';
             line1Input.focus();
         });
 
-        // Delete Note
+        // 삭제 로직
         function deleteNote(id) {
-            messages = messages.filter(msg => msg.id !== id);
-            renderNotes();
+            if (db) {
+                db.ref('poems/' + id).remove();
+            } else {
+                messages = messages.filter(msg => msg.id !== id);
+                renderNotes();
+            }
         }
 
-        // Simple Word Cloud Generator
+        // 실시간 Firebase 데이터 수신 구독
+        function listenToFirebase() {
+            if (!db) return;
+
+            db.ref('poems').orderByChild('timestamp').on('value', (snapshot) => {
+                const data = snapshot.val();
+                messages = [];
+                if (data) {
+                    Object.keys(data).forEach(key => {
+                        messages.unshift({
+                            id: key,
+                            ...data[key]
+                        });
+                    });
+                } else {
+                    // 데이터가 비었을 때 샘플 1개 표시
+                    messages = [{
+                        id: 'sample1',
+                        author: '교장 선생님',
+                        line1: '백 만 번을 환영해도 모자란 우리 교감 선생님!',
+                        line2: '남다른 열정으로 우리 학교를 이끌어주실',
+                        line3: '권위 대신 친근함으로 다가와 주실 선장님을 응원합니다!',
+                        color: 'yellow',
+                        rotation: '-2deg'
+                    }];
+                }
+                renderNotes();
+            });
+        }
+
+        // 워드클라우드 생성
         function updateWordCloud() {
             const wordCounts = {};
             
-            // Extract words from line 1, 2, 3
             messages.forEach(msg => {
                 const fullText = `${msg.line1} ${msg.line2} ${msg.line3}`;
-                // Clean punctuation and split by spaces
                 const words = fullText.replace(/[^\w\s가-힣]/g, '').split(/\s+/);
-                
-                // Words to ignore (Stopwords / single letters)
                 const ignoreList = ['백', '남', '권', '교감', '선생님', '우리', '함께', '있는', '하면'];
 
                 words.forEach(word => {
@@ -303,10 +335,9 @@
                 });
             });
 
-            // Convert to Array & Sort by Count
             const sortedWords = Object.entries(wordCounts)
                 .sort((a, b) => b[1] - a[1])
-                .slice(0, 15); // Top 15 words
+                .slice(0, 15);
 
             wordCloudContainer.innerHTML = '';
 
@@ -315,45 +346,37 @@
                 return;
             }
 
-            // Word Cloud Styling Palette
-            const fontColors = [
-                'text-pink-600', 'text-purple-600', 'text-indigo-600', 
-                'text-blue-600', 'text-emerald-600', 'text-amber-600'
-            ];
+            const fontColors = ['text-pink-600', 'text-purple-600', 'text-indigo-600', 'text-blue-600', 'text-emerald-600', 'text-amber-600'];
 
             sortedWords.forEach(([word, count], index) => {
                 const badge = document.createElement('span');
-                
-                // Calculate font size according to frequency
-                let fontSize = 'text-base';
-                let fontWeight = 'font-normal';
-
-                if (index === 0) {
-                    fontSize = 'text-3xl md:text-4xl';
-                    fontWeight = 'font-black';
-                } else if (index < 3) {
-                    fontSize = 'text-2xl md:text-3xl';
-                    fontWeight = 'font-extrabold';
-                } else if (index < 6) {
-                    fontSize = 'text-xl md:text-2xl';
-                    fontWeight = 'font-bold';
-                } else {
-                    fontSize = 'text-sm md:text-base';
-                    fontWeight = 'font-medium';
-                }
-
+                let fontSize = index === 0 ? 'text-3xl md:text-4xl' : (index < 3 ? 'text-2xl md:text-3xl' : 'text-base');
+                let fontWeight = index < 3 ? 'font-black' : 'font-semibold';
                 const colorClass = fontColors[index % fontColors.length];
 
-                badge.className = `${fontSize} ${fontWeight} ${colorClass} transition-all hover:scale-110 cursor-pointer bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100`;
+                badge.className = `${fontSize} ${fontWeight} ${colorClass} transition-all hover:scale-110 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100`;
                 badge.innerHTML = `${word} <sub class="text-xs text-gray-400 font-normal">${count}</sub>`;
                 
                 wordCloudContainer.appendChild(badge);
             });
         }
 
-        // Initial Render on Page Load
         window.onload = function() {
-            renderNotes();
+            if (db) {
+                listenToFirebase();
+            } else {
+                // 샘플 데이터 1개 설정
+                messages = [{
+                    id: 'sample1',
+                    author: '교장 선생님',
+                    line1: '백 만 번을 환영해도 모자란 우리 교감 선생님!',
+                    line2: '남다른 열정으로 우리 학교를 이끌어주실',
+                    line3: '권위 대신 친근함으로 다가와 주실 선장님을 응원합니다!',
+                    color: 'yellow',
+                    rotation: '-2deg'
+                }];
+                renderNotes();
+            }
         };
     </script>
 </body>
